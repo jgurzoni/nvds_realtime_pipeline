@@ -4,7 +4,9 @@
 #Build output
 debug/
 release/
+build/
 
 #data sources
 video_samples/
 checkpoints/
+deepstream-test4/
