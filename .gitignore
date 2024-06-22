@@ -1,4 +1,10 @@
 #VSCode settings
 .vscode/
 
-model_and_video_yolov10/
+#Build output
+debug/
+release/
+
+#data sources
+video_samples/
+checkpoints/

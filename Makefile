@@ -14,9 +14,9 @@
 # limitations under the License.
 ################################################################################
 
-CUDA_VER?=
+CUDA_VER?=12.2
 ifeq ($(CUDA_VER),)
-  $(error "CUDA_VER is not set")
+	$(error "CUDA_VER is not set")
 endif
 
 APP:= realtime_pipeline
@@ -33,7 +33,9 @@ INCS:= $(wildcard *.h)
 
 PKGS:= gstreamer-1.0
 
-OBJS:= $(SRCS:.c=.o)
+OBJS:= $(SRCS:.cpp=.o)
+
+CFLAGS = -Wall
 
 CFLAGS+= -I$(DS_SDK_ROOT)/sources/includes \
  -I /usr/local/cuda-$(CUDA_VER)/include
@@ -42,17 +44,40 @@ CFLAGS+= `pkg-config --cflags $(PKGS)`
 
 LIBS:= `pkg-config --libs $(PKGS)`
 
+CC:= g++
+
 LIBS+= -L$(LIB_INSTALL_DIR) -lnvdsgst_meta -lnvds_meta \
  -L/usr/local/cuda-$(CUDA_VER)/lib64/ -lcudart \
  -lcuda -Wl,-rpath,$(LIB_INSTALL_DIR)
 
-all: $(APP)
+DEBUG_DIR = debug
+RELEASE_DIR = release
+DEBUG_TARGET = $(DEBUG_DIR)/$(APP)
+RELEASE_TARGET = $(RELEASE_DIR)/$(APP)
 
-%.o: %.cpp $(INCS) Makefile
-	$(CC) -o $@ $(CFLAGS) $<
+all: release
 
-$(APP): $(OBJS) Makefile
-	$(CC) -o $(APP) $(OBJS) $(LIBS)
+debug: CFLAGS += -g
+debug: $(DEBUG_TARGET)
+
+release: CFLAGS += -O2
+release: $(RELEASE_TARGET)
+
+$(DEBUG_TARGET): $(addprefix $(DEBUG_DIR)/, $(OBJS))
+	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+
+$(RELEASE_TARGET): $(addprefix $(RELEASE_DIR)/, $(OBJS))
+	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
+
+$(DEBUG_DIR)/%.o: %.cpp
+	@mkdir -p $(DEBUG_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(RELEASE_DIR)/%.o: %.cpp
+	@mkdir -p $(RELEASE_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(OBJS) $(APP)
+	@rm -rf $(DEBUG_DIR) $(RELEASE_DIR)
+
+.PHONY: all clean debug release
