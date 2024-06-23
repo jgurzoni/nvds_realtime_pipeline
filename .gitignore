@@ -8,5 +8,5 @@ build/
 
 #data sources
 video_samples/
-checkpoints/
+models/
 _reference-apps/

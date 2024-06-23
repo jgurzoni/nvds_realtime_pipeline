@@ -22,7 +22,6 @@ extern "C" bool NvDsParseCustomBoundingBox(
     NvDsInferParseDetectionParams const& detectionParams,
     std::vector<NvDsInferParseObjectInfo>& objectList)
     {
-        auto numOutputLayers = outputLayerInfo.size();
 
         float netWidth = networkInfo.width;
         float netHeight = networkInfo.height;
@@ -47,7 +46,10 @@ extern "C" bool NvDsParseCustomBoundingBox(
             dimPreds = inferDims.d[1];
             dimCoords = inferDims.d[2];
         }
-
+        if (dimBatch != 1){
+            std::cerr << "Error: Only batch size 1 is supported" << std::endl;
+            return false;
+        }
         if (dimCoords != 6){
             std::cerr << "Error: Number of coordinates should be 6" << std::endl;
             return false;
