@@ -33,6 +33,7 @@ extern "C" bool NvDsParseCustomBoundingBox(
         NvDsInferLayerInfo layerInfo = outputLayerInfo[0];
         NvDsInferDims inferDims = layerInfo.inferDims;
         int numConfiguredClasses = detectionParams.numClassesConfigured;
+        // get the per class pre-cluster threshold
         float threshold = detectionParams.perClassPreclusterThreshold[0];
 
         int dimPreds, dimCoords;
@@ -47,34 +48,33 @@ extern "C" bool NvDsParseCustomBoundingBox(
             dimCoords = inferDims.d[2];
         }
 
-        std::vector<NvDsInferParseObjectInfo> parsedDetections;
+        if (dimCoords != 6){
+            std::cerr << "Error: Number of coordinates should be 6" << std::endl;
+            return false;
+        }
         
         float *data = (float*) outputLayerInfo[0].buffer;
         std::vector<NvDsInferParseObjectInfo> objects;
         NvDsInferParseObjectInfo obj;
+
         for(int i=0; i< dimPreds; i++){
-            float x = data[i * 6 + 0]; // Access x
-            float y = data[i * 6 + 1]; // Access y
-            float w = data[i * 6 + 2]; // Access w
-            float h = data[i * 6 + 3]; // Access h
+            float x = data[i * dimCoords + 0];
+            float y = data[i * dimCoords + 1];
+            float w = data[i * dimCoords + 2];
+            float h = data[i * dimCoords + 3];
             float left = x * x_scale_factor;
             float top = y * y_scale_factor;
             float width = (w - x) * x_scale_factor;
             float height = (h - y) * y_scale_factor;
                         
-            std::vector<float> cls_confidences;
-            for (int j=0; j < numConfiguredClasses; j++){
-                cls_confidences.push_back(data[i * 6 + 4 + j]);
-            }
-
-            unsigned int maxClsIdx = std::max_element(cls_confidences.begin(), cls_confidences.end()) - cls_confidences.begin();
-            float maxClsConfidence = cls_confidences[maxClsIdx]/100.f; //condidence is coming 0-100
+            float cls_confidence = data[i * dimCoords + 4];
+            unsigned int class_id = data[i * dimCoords + 5];
             
-            if (maxClsConfidence < threshold){
+            if (cls_confidence < threshold || class_id >= numConfiguredClasses){
                 continue;
             }
 
-            obj = {maxClsIdx, left, top, width, height, maxClsConfidence};
+            obj = {class_id, left, top, width, height, cls_confidence};
             objects.push_back(obj);
         }
         objectList = objects;

@@ -9,4 +9,4 @@ build/
 #data sources
 video_samples/
 checkpoints/
-deepstream-test4/
+_reference-apps/

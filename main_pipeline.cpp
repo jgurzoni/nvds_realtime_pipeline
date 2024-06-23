@@ -31,23 +31,19 @@
 
 #define PGIE_CLASS_ID_PERSON 1
 
-#define NVINFER_PLUGIN "nvinfer"
-
-#define INFER_PGIE_CONFIG_FILE "conf_inver_primary_yolov10n.txt"
+#define INFER_PGIE_CONFIG_FILE "conf_infer_primary_yolov10n.txt"
 
 /* The muxer output resolution must be set if the input streams will be of
  * different resolution. The muxer will scale all the input frames to this
  * resolution. */
-#define MUXER_OUTPUT_WIDTH 640
-#define MUXER_OUTPUT_HEIGHT 640
+#define MUXER_OUTPUT_WIDTH 1280
+#define MUXER_OUTPUT_HEIGHT 720
 
 /* Muxer batch formation timeout, for e.g. 40 millisec. Should ideally be set
  * based on the fastest source's framerate. */
 #define MUXER_BATCH_TIMEOUT_USEC 40000
 
 gint frame_number = 0;
-gchar pgie_classes_str[2][32] = { "Person", "Other"
-};
 
 #define PRIMARY_DETECTOR_UID 1
 
@@ -205,7 +201,7 @@ main (int argc, char *argv[])
     input_stream = argv[1];
 
     /* Set element properties */
-    g_object_set (G_OBJECT (source), "location", argv[1], NULL);
+    g_object_set (G_OBJECT (source), "location", input_stream, NULL);
     g_object_set (G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",
         MUXER_OUTPUT_HEIGHT, "batch-size", 1, "batched-push-timeout",
         MUXER_BATCH_TIMEOUT_USEC, NULL);
