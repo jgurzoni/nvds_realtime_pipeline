@@ -29,8 +29,7 @@
 
 #define MAX_DISPLAY_LEN 64
 
-#define PGIE_CLASS_ID_VEHICLE 2
-#define PGIE_CLASS_ID_PERSON 0
+#define PGIE_CLASS_ID_PERSON 1
 
 #define NVINFER_PLUGIN "nvinfer"
 
@@ -47,7 +46,7 @@
 #define MUXER_BATCH_TIMEOUT_USEC 40000
 
 gint frame_number = 0;
-gchar pgie_classes_str[2][32] = { "Vehicle", "Person",
+gchar pgie_classes_str[2][32] = { "Person", "Other"
 };
 
 #define PRIMARY_DETECTOR_UID 1
@@ -61,7 +60,7 @@ nvvidconv_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
 {
     GstBuffer *buf = (GstBuffer *) info->data;
     NvDsObjectMeta *obj_meta = NULL;
-    guint vehicle_count = 0;
+    guint other_count = 0;
     guint person_count = 0;
     NvDsMetaList * l_frame = NULL;
     NvDsMetaList * l_obj = NULL;
@@ -76,12 +75,13 @@ nvvidconv_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         for (l_obj = frame_meta->obj_meta_list; l_obj != NULL;
                 l_obj = l_obj->next) {
             obj_meta = (NvDsObjectMeta *) (l_obj->data);
-
-            /* Check that the class id is that of vehicles/persons. */
-            if (obj_meta->class_id == PGIE_CLASS_ID_VEHICLE)
-              vehicle_count++;
-            if (obj_meta->class_id == PGIE_CLASS_ID_PERSON)
+            
+            /* Check that the class id is that of persons. */
+            if (obj_meta->class_id == PGIE_CLASS_ID_PERSON){
               person_count++;
+            }else{
+              other_count++;
+            }
 
         }
         display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
@@ -89,7 +89,7 @@ nvvidconv_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         display_meta->num_labels = 1;
         txt_params->display_text = static_cast<char*>(g_malloc0(MAX_DISPLAY_LEN));
         offset = snprintf(txt_params->display_text, MAX_DISPLAY_LEN, "Person = %d ", person_count);
-        offset += snprintf(txt_params->display_text + offset , MAX_DISPLAY_LEN, "Vehicle = %d ", vehicle_count);
+        offset += snprintf(txt_params->display_text + offset , MAX_DISPLAY_LEN, "Noise Classes = %d ", other_count);
 
         /* Now set the offsets where the string should appear */
         txt_params->x_offset = 10;
@@ -113,9 +113,11 @@ nvvidconv_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
         nvds_add_display_meta_to_frame(frame_meta, display_meta);
     }
 
-
-    g_print ("Frame Number = %d Vehicle Count = %d Person Count = %d\n",
-            frame_number, vehicle_count, person_count);
+    //every n frames, print the count
+    if (frame_number % 100 == 0){
+      g_print ("Frame Number = %d Noise Count = %d Person Count = %d\n",
+              frame_number, other_count, person_count);
+    }
     frame_number++;
     return GST_PAD_PROBE_OK;
 }
@@ -152,7 +154,6 @@ static void
 usage(const char *bin)
 {
   g_printerr ("Usage: %s <h264_elementary_stream>\n", bin);
-  g_printerr ("For nvinferserver, Usage: %s -t inferserver <h264_elementary_stream>\n", bin);
 }
 
 int
@@ -166,7 +167,6 @@ main (int argc, char *argv[])
   guint bus_watch_id;
   GstPad *nvvidconv_sink_pad = NULL;
   gchar *input_stream = NULL;
-  //const char *infer_plugin = NVINFER_PLUGIN;
 
   int current_device = -1;
   cudaGetDevice(&current_device);
