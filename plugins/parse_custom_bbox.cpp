@@ -32,7 +32,7 @@ extern "C" bool NvDsParseCustomBoundingBox(
 
         NvDsInferLayerInfo layerInfo = outputLayerInfo[0];
         NvDsInferDims inferDims = layerInfo.inferDims;
-        int numConfiguredClasses = detectionParams.numClassesConfigured;
+        unsigned int numConfiguredClasses = detectionParams.numClassesConfigured;
         // get the per class pre-cluster threshold
         float threshold = detectionParams.perClassPreclusterThreshold[0];
 

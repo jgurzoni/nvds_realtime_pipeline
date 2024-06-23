@@ -27,18 +27,17 @@ DS_SDK_ROOT:=/opt/nvidia/deepstream/deepstream
 
 LIB_INSTALL_DIR?=$(DS_SDK_ROOT)/lib/
 
-SRCS:= $(wildcard *.cpp)
+SRCS:= $(shell find src -name '*.cpp')  # Recursively find all cpp files
 
-INCS:= $(wildcard *.h)
+INCS:= $(shell find src -name '*.h')  # Recursively find all header files
 
 PKGS:= gstreamer-1.0
 
-OBJS:= $(SRCS:.cpp=.o)
+OBJS:= $(SRCS:%.cpp=%.o)
 
-CFLAGS = -Wall
-
-CFLAGS+= -I$(DS_SDK_ROOT)/sources/includes \
- -I /usr/local/cuda-$(CUDA_VER)/include
+CFLAGS = -Wall -I$(DS_SDK_ROOT)/sources/includes \
+         -I /usr/local/cuda-$(CUDA_VER)/include \
+         $(shell find src -type d -exec echo -I{} \;)  # Automatically add all subdirectories
 
 CFLAGS+= `pkg-config --cflags $(PKGS)`
 
@@ -70,11 +69,11 @@ $(RELEASE_TARGET): $(addprefix $(RELEASE_DIR)/, $(OBJS))
 	$(CC) $^ -o $@ $(LDFLAGS) $(LIBS)
 
 $(DEBUG_DIR)/%.o: %.cpp
-	@mkdir -p $(DEBUG_DIR)
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(RELEASE_DIR)/%.o: %.cpp
-	@mkdir -p $(RELEASE_DIR)
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
