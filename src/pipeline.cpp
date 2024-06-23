@@ -27,7 +27,7 @@
 
 #define MAX_DISPLAY_LEN 64
 
-#define PGIE_CLASS_ID_PERSON 1
+#define PGIE_CLASS_ID_PERSON 0
 
 /* Muxer batch formation timeout, for e.g. 40 millisec. Should ideally be set
  * based on the fastest source's framerate. */
@@ -71,7 +71,7 @@ Pipeline::Pipeline(const char* input_stream){
 
 // Destructor
 Pipeline::~Pipeline(){
-    /* Out of the main loop, clean up nicely */
+    /* clean up nicely */
     gst_element_set_state (pipeline, GST_STATE_NULL);
     g_print ("Deleting pipeline\n");
     gst_object_unref (GST_OBJECT (pipeline));
@@ -79,6 +79,15 @@ Pipeline::~Pipeline(){
     g_main_loop_unref (loop);
   }
 
+int Pipeline::Init(){
+  // Initialize the class, setting up the pipeline. 
+  //Must be called before running the pipeline
+    int rslt = create_elements();
+    if (rslt == 0)
+      is_init = true;
+    
+    return rslt;
+}
 
 int Pipeline::create_elements(void){
   /* Standard GStreamer initialization */
@@ -108,7 +117,7 @@ int Pipeline::create_elements(void){
     /* Set element properties */
   
     g_object_set (G_OBJECT (streammux), "width", this->muxer_output_width, "height",
-        this->muxer_output_heigth, "batch-size", 1, "batched-push-timeout",
+        this->muxer_output_height, "batch-size", 1, "batched-push-timeout",
         MUXER_BATCH_TIMEOUT_USEC, NULL);
     g_object_set (G_OBJECT (primary_detector), "config-file-path",
         this->infer_pgie_config_file, "unique-id", PRIMARY_DETECTOR_UID, NULL);
@@ -129,13 +138,11 @@ int Pipeline::create_elements(void){
     g_printerr ("Streammux request sink pad failed. Exiting.\n");
     return -1;
   }
-
   srcpad = gst_element_get_static_pad (decoder, pad_name_src);
   if (!srcpad) {
     g_printerr ("Decoder request src pad failed. Exiting.\n");
     return -1;
   }
-
   if (gst_pad_link (srcpad, sinkpad) != GST_PAD_LINK_OK) {
       g_printerr ("Failed to link decoder to stream muxer. Exiting.\n");
       return -1;
@@ -178,9 +185,16 @@ int Pipeline::create_elements(void){
 }
 
 void Pipeline::run(gchar* input_stream){
+    if (!is_init){
+      g_printerr ("Pipeline not initialized. Must run Init first.\n");
+      return;
+    }
+    
     /* Set the input stream to the source element */
     g_object_set (G_OBJECT (source), "location", input_stream, NULL);
-
+    
+    this->frame_number = 0;
+    
     /* Set the pipeline to "playing" state */
     g_print ("Now playing: %s\n", input_stream);
     gst_element_set_state (pipeline, GST_STATE_PLAYING);
@@ -189,12 +203,19 @@ void Pipeline::run(gchar* input_stream){
     g_print ("Running...\n");
     g_main_loop_run (loop);
     g_print ("Returned, stopping playback\n");
+    // Stop pipeline
+    gst_element_set_state (pipeline, GST_STATE_NULL);
+    // Wait for state change to complete
+    gst_element_get_state(pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
   }
 
 GstPadProbeReturn
 Pipeline::nvvidconv_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
-    gpointer u_data)
-{
+    gpointer u_data){
+    // This is the callback function for the probe
+    // This is where we will add the logic to count the number of people and other classes
+    // and display the count on the screen
+
     GstBuffer *buf = (GstBuffer *) info->data;
     NvDsObjectMeta *obj_meta = NULL;
     guint other_count = 0;

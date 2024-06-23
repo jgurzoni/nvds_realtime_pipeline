@@ -23,16 +23,13 @@ int main (int argc, char *argv[])
   }
   char* input_stream = argv[1];
 
-  /* Initialize CUDA */
-  int current_device = -1;
-  cudaGetDevice(&current_device);
-  struct cudaDeviceProp prop;
-  cudaGetDeviceProperties(&prop, current_device);
   // GST initialization
   gst_init (&argc, &argv);
   //Create pipeline
   Pipeline pipeline = Pipeline(input_stream);
-  pipeline.create_elements();
+  //Initialize pipeline
+  pipeline.Init();
+  //Run pipeline
   pipeline.run(static_cast<gchar*>(input_stream));
 
   return 0;
