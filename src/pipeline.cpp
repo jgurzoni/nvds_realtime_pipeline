@@ -35,6 +35,17 @@
 
 #define PRIMARY_DETECTOR_UID 1
 
+/* This is the callback for the pad-added signal between demux and parser. */
+/*Ideally I'd like to wrap it within the C++ class, but ran into issues.
+The solution with lambdas like in the probe callback did not work here.*/
+void callback_new_pad_demux_parser (GstElement *qtdemux, GstPad* pad, gpointer data) {
+  GstElement* h264parser = (GstElement*) data;
+  gchar *name = gst_pad_get_name (pad);
+  if (strcmp (name, "video_0") == 0 && 
+      !gst_element_link_pads(qtdemux, name, h264parser, "sink")){
+    g_printerr ("Could not link %s pad of qtdemux to sink pad of h264parser", name);
+  }
+}
 
 gboolean
 bus_call (GstBus * bus, GstMessage * msg, gpointer data)
@@ -65,8 +76,7 @@ bus_call (GstBus * bus, GstMessage * msg, gpointer data)
 }
 
 // Primary constructor
-Pipeline::Pipeline(const char* input_stream){
-    this->input_stream = (gchar*)input_stream;
+Pipeline::Pipeline(){
   }
 
 // Destructor
@@ -89,13 +99,26 @@ int Pipeline::Init(){
     return rslt;
 }
 
+void Pipeline::setup_bus_handler(void){
+  // Set up the bus to handle messages
+  bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+  bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
+  gst_object_unref (bus);
+}
+
 int Pipeline::create_elements(void){
   /* Standard GStreamer initialization */
   this->loop = g_main_loop_new (NULL, FALSE);
+  /* Create the pipeline object itself */
+  this->pipeline = gst_pipeline_new ("mypipeline");
+  
+  // Set up the bus handler
+  this->setup_bus_handler();
 
   /* Create GStreamer elements */
-    this->pipeline = gst_pipeline_new ("pipeline");
     this->source = gst_element_factory_make ("filesrc", "file-source");
+    /* QTDemux for demuxing different type of input streams */
+    this->qtdemux = gst_element_factory_make("qtdemux", "qtdemux");
     this->h264parser = gst_element_factory_make ("h264parse", "h264-parser");
     this->decoder = gst_element_factory_make ("nvv4l2decoder", "nvv4l2-decoder");
     this->streammux = gst_element_factory_make ("nvstreammux", "stream-muxer");
@@ -105,29 +128,25 @@ int Pipeline::create_elements(void){
     //elements for the save to file sink
     this->encoder = gst_element_factory_make ("nvv4l2h264enc", "h264-encoder");
     this->parser = gst_element_factory_make ("h264parse", "h264-parser2");
-    this->muxer = gst_element_factory_make ("qtmux", "qt-muxer");
+    this->muxer = gst_element_factory_make ("qtmux", "qtmuxer");
     this->sink = gst_element_factory_make ("filesink", "file-sink");
 
-    if (!pipeline || !source || !h264parser || !decoder || !streammux || !primary_detector ||
-        !nvvidconv || !nvosd || !encoder || !parser || !muxer || !sink) {
+    if (!pipeline || !source || !qtdemux || !h264parser || !decoder || !streammux || 
+        !primary_detector || !nvvidconv || !nvosd || !encoder || !parser || !muxer || !sink) {
         g_printerr ("One element could not be created. Exiting.\n");
         return -1;
     }
 
     /* Set element properties */
-  
     g_object_set (G_OBJECT (streammux), "width", this->muxer_output_width, "height",
         this->muxer_output_height, "batch-size", 1, "batched-push-timeout",
         MUXER_BATCH_TIMEOUT_USEC, NULL);
     g_object_set (G_OBJECT (primary_detector), "config-file-path",
         this->infer_pgie_config_file, "unique-id", PRIMARY_DETECTOR_UID, NULL);
-    g_object_set (G_OBJECT (sink), "location", "output.mp4", NULL);
 
   
-  /* we add a message handler */
-  bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
-  bus_watch_id = gst_bus_add_watch (bus, bus_call, loop);
-  gst_object_unref (bus);
+  // add the callback to link the demuxer to the h264parser
+  g_signal_connect (qtdemux, "pad-added", G_CALLBACK (callback_new_pad_demux_parser), h264parser); 
 
   GstPad *sinkpad, *srcpad;
   gchar pad_name_sink[16] = "sink_0";
@@ -151,16 +170,22 @@ int Pipeline::create_elements(void){
   gst_object_unref (sinkpad);
   gst_object_unref (srcpad);
 
-  /* Add all elements into the pipeline */
-    gst_bin_add_many (GST_BIN (pipeline), source, h264parser, decoder, streammux,
-        primary_detector, nvvidconv, nvosd, encoder, parser, muxer, sink, NULL);
 
-    /* Link the elements together */
-    if (!gst_element_link_many (source, h264parser, decoder, streammux, primary_detector,
-        nvvidconv, nvosd, encoder, parser, muxer, sink, NULL)) {
-        g_printerr ("Elements could not be linked. Exiting.\n");
-        return -1;
-    }
+  /* Add all elements into the pipeline */
+  gst_bin_add_many (GST_BIN (pipeline), source, qtdemux, h264parser, decoder, streammux,
+        primary_detector, nvvidconv, nvosd, encoder, parser, muxer, sink, NULL);
+  
+  // Link only source to the demuxer, as the demuxer will create dynamic pads
+  if (!gst_element_link(source, qtdemux)){
+    g_printerr ("Elements could not be linked. Exiting.\n");
+    return -1;
+  } 
+  /* Link the remaining elements together */
+  if (!gst_element_link_many (h264parser, decoder, streammux, primary_detector,
+      nvvidconv, nvosd, encoder, parser, muxer, sink, NULL)) {
+      g_printerr ("Elements could not be linked. Exiting.\n");
+      return -1;
+  }
 
   /* Lets add probe to get informed of the meta data generated, we add probe to
    * the sink pad of the nvvideoconvert element, since by that time, the buffer would have
@@ -171,20 +196,19 @@ int Pipeline::create_elements(void){
     g_print ("Unable to get sink pad\n");
   else{
     // Register the lambda function as a callback
-    // This should resolve the need for a static probe callback function and allow us to see this within it
+    // This resolves the need for a static probe callback function so we cant wrap in a class
     gst_pad_add_probe(nvvidconv_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
     +[](GstPad* pad, GstPadProbeInfo* info, gpointer user_data) -> GstPadProbeReturn {
         auto* self = static_cast<Pipeline*>(user_data);
         return self->nvvidconv_sink_pad_buffer_probe(pad, info, user_data);
     }, this, nullptr);
 
-
   }
   return 0;
 
 }
 
-void Pipeline::run(gchar* input_stream){
+void Pipeline::run(gchar* input_stream, gchar* output_file){
     if (!is_init){
       g_printerr ("Pipeline not initialized. Must run Init first.\n");
       return;
@@ -192,7 +216,9 @@ void Pipeline::run(gchar* input_stream){
     
     /* Set the input stream to the source element */
     g_object_set (G_OBJECT (source), "location", input_stream, NULL);
-    
+    /* Set the output file location */
+    g_object_set (G_OBJECT (sink), "location", output_file, NULL);
+
     this->frame_number = 0;
     
     /* Set the pipeline to "playing" state */

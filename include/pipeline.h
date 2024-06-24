@@ -18,15 +18,16 @@
 
 class Pipeline {
 private:
-  GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL,
-        *decoder = NULL, *streammux = NULL, *primary_detector = NULL,
-        *nvvidconv = NULL, *nvosd = NULL, 
+  GstElement *pipeline = NULL, *source = NULL, *qtdemux = NULL, 
+        *h264parser = NULL, *decoder = NULL, *streammux = NULL, 
+        *primary_detector = NULL, *nvvidconv = NULL, *nvosd = NULL, 
         *encoder = NULL, *parser = NULL, *muxer = NULL, *sink = NULL;
   GMainLoop *loop = NULL;
   GstBus *bus = NULL;
   guint bus_watch_id;
   GstPad *nvvidconv_sink_pad = NULL;
   gchar *input_stream = NULL;
+  gchar *output_file = NULL;
   const gchar *infer_pgie_config_file = INFER_PGIE_CONFIG_FILE;
   guint muxer_output_width = MUXER_OUTPUT_WIDTH;
   guint muxer_output_height = MUXER_OUTPUT_HEIGHT;
@@ -34,12 +35,13 @@ private:
   bool is_init = false;
 
 public:
-  Pipeline(const char* input_stream);
+  Pipeline();
   ~Pipeline();
-  void run(gchar* input_stream);
+  void run(gchar* input_stream, gchar* output_file);
   int Init();
 private:
   int create_elements(void);
+  void setup_bus_handler(void);
   GstPadProbeReturn nvvidconv_sink_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_data);
 };
 

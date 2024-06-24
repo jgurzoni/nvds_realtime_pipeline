@@ -1,6 +1,11 @@
-# C++ Application
+# E2E Realtime Detector Application
 
-This README provides information on the prerequisites, build instructions, and how to run the application. This application leverages the Deepstream SDK and CUDA for video processing.
+This application is a simple end-to-end detector application using the Deepstream SDK 7.0.\
+It uses a Yolov10n model to detect objects in a video stream. 
+
+**NOTE: The application will output a video file with the detected objects instead of sink to a display.\
+This is because my laptop does not have a NVIDIA GPU so I had to use a cloud-based VM to develop.**\
+Sorry for the inconvenience.
 
 ## Prerequisites
 
@@ -72,6 +77,7 @@ nms-iou-threshold=0.2
 
 Run the application with the command below. It will output a .mp4 file with the detected objects.
 ```bash
-## Run the application
-.realtime_pipeline <video file name>
+#go back to the app folder (cd .. if you are in the build folder)
+#execute the application
+./build/realtime_pipeline <video input file name> <output file name>
 ```
